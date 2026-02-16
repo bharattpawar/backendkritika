@@ -32,11 +32,27 @@ const corsOptions = {
 
     if (allowedOrigins.includes(origin)) return callback(null, true);
 
+    console.error('[CORS] Blocked request', {
+      origin,
+      allowedOrigins,
+    });
     return callback(new Error(`CORS blocked for origin: ${origin}`));
   },
 };
 
 app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  const start = Date.now();
+  const origin = req.headers.origin || 'N/A';
+  console.log(`[REQ] ${req.method} ${req.originalUrl} | origin=${origin}`);
+  res.on('finish', () => {
+    const durationMs = Date.now() - start;
+    console.log(
+      `[RES] ${req.method} ${req.originalUrl} | status=${res.statusCode} | durationMs=${durationMs}`
+    );
+  });
+  next();
+});
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,6 +72,26 @@ app.get('/', (req, res) => {
       health: 'GET /api/health'
     }
   });
+});
+
+app.use((err, req, res, next) => {
+  console.error('[EXPRESS_ERROR]', {
+    method: req.method,
+    url: req.originalUrl,
+    message: err?.message,
+    stack: err?.stack,
+  });
+
+  if (res.headersSent) return next(err);
+  return res.status(500).json({ error: err?.message || 'Internal server error' });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[UNHANDLED_REJECTION]', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[UNCAUGHT_EXCEPTION]', error);
 });
 
 const startServer = async () => {
