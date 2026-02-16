@@ -13,30 +13,36 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const PUBLIC_BACKEND_URL = process.env.PUBLIC_BACKEND_URL || `http://localhost:${PORT}`;
 
-const allowedOrigins = (
-  process.env.CORS_ORIGINS ||
-  process.env.FRONTEND_URL ||
-  ''
-)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+const normalizeOrigin = (value = '') => value.trim().replace(/\/+$/, '').toLowerCase();
+
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      ...(process.env.CORS_ORIGINS || '').split(','),
+      process.env.FRONTEND_URL || '',
+    ]
+      .map(normalizeOrigin)
+      .filter(Boolean)
+  )
+);
 
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow server-to-server requests (no browser origin header)
     if (!origin) return callback(null, true);
 
+    const normalizedOrigin = normalizeOrigin(origin);
+
     // If no explicit origins are set, allow all (useful for local quick setup)
     if (allowedOrigins.length === 0) return callback(null, true);
 
-    if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
 
     console.error('[CORS] Blocked request', {
-      origin,
+      origin: normalizedOrigin,
       allowedOrigins,
     });
-    return callback(new Error(`CORS blocked for origin: ${origin}`));
+    return callback(new Error(`CORS blocked for origin: ${normalizedOrigin}`));
   },
 };
 
