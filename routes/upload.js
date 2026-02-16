@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import fs from 'fs';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { extractZip, getAllFiles, readFileContent, cleanupDirectory } from '../utils/fileProcessor.js';
@@ -8,9 +9,21 @@ import { getPineconeIndex } from '../config/pinecone.js';
 import { getDB } from '../config/db.js';
 
 const router = express.Router();
+const uploadRootDir = process.env.UPLOAD_DIR || './uploads';
+const uploadRootPath = path.resolve(uploadRootDir);
+
+const ensureUploadRootExists = () => {
+  if (!fs.existsSync(uploadRootPath)) {
+    fs.mkdirSync(uploadRootPath, { recursive: true });
+    console.log(`[UPLOAD] Created upload directory at ${uploadRootPath}`);
+  }
+};
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
+  destination: (req, file, cb) => {
+    ensureUploadRootExists();
+    cb(null, uploadRootPath);
+  },
   filename: (req, file, cb) => cb(null, `${Date.now()}-${file.originalname}`)
 });
 
@@ -24,7 +37,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   const requestId = `upload-${uploadStartTime}`;
   const codebaseId = uuidv4();
   const zipPath = req.file?.path;
-  const extractPath = path.join('uploads', codebaseId);
+  const extractPath = path.join(uploadRootPath, codebaseId);
 
   try {
     if (!req.file) {
